@@ -4,10 +4,19 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { LRUCache } from "lru-cache";
-import admin from "firebase-admin";
 import Groq from "groq-sdk";
-import { initializeApp as initializeClientApp } from "firebase/app";
-import { getFirestore as getClientFirestore, doc as clientDoc, getDoc as getClientDoc } from "firebase/firestore";
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  collection, 
+  query, 
+  where, 
+  limit, 
+  getDocs 
+} from "firebase/firestore";
 
 // Initialize Groq
 if (!process.env.GROQ_API_KEY) {
@@ -18,25 +27,10 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || "missing_key",
 });
 
-// Initialize Firebase Admin
+// Initialize Firebase Client SDK
 import firebaseConfig from "./firebase-applet-config.json" assert { type: "json" };
-if (!admin.apps.length) {
-  try {
-    // Attempting default initialization which is most reliable in this environment
-    admin.initializeApp();
-    console.log("Firebase Admin initialized with default credentials");
-  } catch (e) {
-    console.warn("Default Admin initialization failed, falling back to config:", e);
-    admin.initializeApp({
-      projectId: firebaseConfig.projectId,
-    });
-  }
-}
-const db = admin.firestore();
-
-// Initialize Firebase Client (as fallback for reading if admin has permission issues)
-const clientApp = initializeClientApp(firebaseConfig);
-const clientDb = getClientFirestore(clientApp);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +46,7 @@ let isFirestoreOverQuota = false;
 let quotaResetTimeout: NodeJS.Timeout | null = null;
 
 function handleFirestoreQuotaError(error: any) {
-  if (error.message?.includes("RESOURCE_EXHAUSTED") || error.code === 8) {
+  if (error.message?.includes("RESOURCE_EXHAUSTED") || error.code === "resource-exhausted") {
     console.error("CRITICAL: Firestore Quota Exceeded. Suspending Firestore calls for 5 minutes.");
     isFirestoreOverQuota = true;
     if (quotaResetTimeout) clearTimeout(quotaResetTimeout);
@@ -64,15 +58,15 @@ function handleFirestoreQuotaError(error: any) {
 }
 
 async function startServer() {
-  const app = express();
+  const serverApp = express();
   const PORT = 3000;
 
   // API routes
-  app.get("/api/health", (req, res) => {
+  serverApp.get("/api/health", (req, res) => {
     res.json({ status: "ok", firestoreStatus: isFirestoreOverQuota ? "over_quota" : "ok" });
   });
 
-  app.post("/api/generate-description", express.json(), async (req, res) => {
+  serverApp.post("/api/generate-description", express.json(), async (req, res) => {
     // Verify API Key existence for debugging in production
     if (!process.env.GROQ_API_KEY) {
       console.error("CRITICAL ERROR: GROQ_API_KEY is missing from environment variables.");
@@ -98,20 +92,12 @@ async function startServer() {
       
       if (!isFirestoreOverQuota) {
         try {
-          const docRef = db.collection("products").doc(slug);
-          const doc = await docRef.get();
-          if (doc.exists) docData = doc.data();
-        } catch (adminError: any) {
-          handleFirestoreQuotaError(adminError);
-          console.warn("Admin SDK failed to read, trying Client SDK fallback:", adminError.message);
-          try {
-            const clientDocRef = clientDoc(clientDb, "products", slug);
-            const clientSnap = await getClientDoc(clientDocRef);
-            if (clientSnap.exists()) docData = clientSnap.data();
-          } catch (clientError: any) {
-            handleFirestoreQuotaError(clientError);
-            console.error("Client SDK fallback also failed:", clientError.message);
-          }
+          const docRef = doc(db, "products", slug);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) docData = docSnap.data();
+        } catch (error: any) {
+          handleFirestoreQuotaError(error);
+          console.error("Firestore read error:", error.message);
         }
       }
       
@@ -151,12 +137,12 @@ async function startServer() {
       // Save to Firestore so it's cached for all users (only if not over quota)
       if (!isFirestoreOverQuota) {
         try {
-          const docRef = db.collection("products").doc(slug);
-          await docRef.set({ description }, { merge: true });
+          const docRef = doc(db, "products", slug);
+          await setDoc(docRef, { description }, { merge: true });
           console.log(`Saved description for ${slug} to Firestore`);
         } catch (fsError: any) {
           handleFirestoreQuotaError(fsError);
-          console.error("Firestore SET error (Admin SDK):", fsError.message);
+          console.error("Firestore write error:", fsError.message);
         }
       }
 
@@ -176,7 +162,7 @@ async function startServer() {
   });
 
   // Sitemap Index
-  app.get("/sitemap.xml", (req, res) => {
+  serverApp.get("/sitemap.xml", (req, res) => {
     const sitemaps = ["cpu", "gpu", "ram", "other"];
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -190,7 +176,7 @@ async function startServer() {
   });
 
   // Category Sitemaps
-  app.get("/sitemap-:category.xml", async (req, res) => {
+  serverApp.get("/sitemap-:category.xml", async (req, res) => {
     const { category } = req.params;
     const cacheKey = `sitemap-${category}`;
     let xml = cache.get(cacheKey) as string;
@@ -201,14 +187,17 @@ async function startServer() {
       }
 
       try {
-        let query: admin.firestore.Query = db.collection("products");
+        const productsRef = collection(db, "products");
+        let q;
         if (category !== "other") {
-          query = query.where("category", "==", category.toUpperCase());
+          q = query(productsRef, where("category", "==", category.toUpperCase()), limit(5000));
+        } else {
+          q = query(productsRef, limit(5000));
         }
         
-        const snapshot = await query.limit(5000).get();
-        const urls = snapshot.docs.map(doc => {
-          const data = doc.data();
+        const snapshot = await getDocs(q);
+        const urls = snapshot.docs.map(docSnap => {
+          const data = docSnap.data() as any;
           return `
     <url>
       <loc>https://${req.get('host')}/product/${data.slug}</loc>
@@ -237,15 +226,15 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "custom", // Changed to custom to handle HTML injection
+      appType: "custom",
     });
-    app.use(vite.middlewares);
+    serverApp.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(process.cwd(), "dist"), { index: false }));
+    serverApp.use(express.static(path.join(process.cwd(), "dist"), { index: false }));
   }
 
   // Dynamic Metadata and HTML Serving
-  app.get("*", async (req, res) => {
+  serverApp.get("*", async (req, res) => {
     const url = req.originalUrl;
     try {
       let template = fs.readFileSync(
@@ -263,16 +252,21 @@ async function startServer() {
         const cacheKey = `meta-${slug}`;
         let meta = cache.get(cacheKey) as any;
 
-        if (!meta) {
-          const doc = await db.collection("products").doc(slug!).get();
-          if (doc.exists) {
-            const data = doc.data();
-            meta = {
-              title: `${data?.name} - ${data?.category} Specs | BuildXpc`,
-              description: `Technical specifications for ${data?.name}. ${data?.chipset || ''} ${data?.vram || ''} TDP: ${data?.tdp || ''}`,
-              ogImage: `https://picsum.photos/seed/${slug}/1200/630`,
-            };
-            cache.set(cacheKey, meta);
+        if (!meta && slug && !isFirestoreOverQuota) {
+          try {
+            const docRef = doc(db, "products", slug);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              meta = {
+                title: `${data?.name} - ${data?.category} Specs | BuildXpc`,
+                description: `Technical specifications for ${data?.name}. ${data?.chipset || ''} ${data?.vram || ''} TDP: ${data?.tdp || ''}`,
+                ogImage: `https://picsum.photos/seed/${slug}/1200/630`,
+              };
+              cache.set(cacheKey, meta);
+            }
+          } catch (error: any) {
+            handleFirestoreQuotaError(error);
           }
         }
 
@@ -310,7 +304,7 @@ async function startServer() {
     }
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
+  serverApp.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
