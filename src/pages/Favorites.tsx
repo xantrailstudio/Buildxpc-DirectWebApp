@@ -70,13 +70,13 @@ export default function Favorites() {
           </div>
           <div className="space-y-2">
             <h3 className="text-xl font-bold">No favorites yet</h3>
-            <p className="text-black/40 font-medium">Start exploring the directory to save components.</p>
+            <p className="text-black/40 font-medium">Start exploring hardware to save components.</p>
           </div>
           <Link 
-            to="/directory" 
+            to="/" 
             className="inline-flex items-center gap-2 text-sm font-bold text-cyan-600 hover:text-cyan-700 transition-colors uppercase tracking-widest group"
           >
-            Browse Directory
+            Explore Hardware
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>

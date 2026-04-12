@@ -55,59 +55,47 @@ async function startServer() {
     res.json({ status: "ok", firestoreStatus: isFirestoreOverQuota ? "over_quota" : "ok" });
   });
 
-  // Sitemap Index
-  serverApp.get("/sitemap.xml", (req, res) => {
-    const sitemaps = ["cpu", "gpu", "ram", "other"];
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  ${sitemaps.map(cat => `
-  <sitemap>
-    <loc>https://${req.get('host')}/sitemap-${cat}.xml</loc>
-  </sitemap>`).join('')}
-</sitemapindex>`;
-    res.header("Content-Type", "application/xml");
-    res.send(xml);
-  });
-
-  // Category Sitemaps
-  serverApp.get("/sitemap-:category.xml", async (req, res) => {
-    const { category } = req.params;
-    const cacheKey = `sitemap-${category}`;
+  // Dynamic Sitemap
+  serverApp.get("/sitemap.xml", async (req, res) => {
+    const cacheKey = "sitemap-all";
     let xml = cache.get(cacheKey) as string;
 
     if (!xml) {
       if (isFirestoreOverQuota) {
-        return res.status(503).send("Service temporarily unavailable due to high load. Please try again later.");
+        return res.status(503).send("Service temporarily unavailable. Please try again later.");
       }
 
       try {
         const productsRef = collection(db, "products");
-        let q;
-        if (category !== "other") {
-          q = query(productsRef, where("category", "==", category.toUpperCase()), limit(5000));
-        } else {
-          q = query(productsRef, limit(5000));
-        }
-        
+        // Fetch up to 20,000 products to cover the 15,000+ requirement
+        const q = query(productsRef, limit(20000));
         const snapshot = await getDocs(q);
+        
         const urls = snapshot.docs.map(docSnap => {
           const data = docSnap.data() as any;
+          const lastmod = data.lastUpdated ? new Date(data.lastUpdated).toISOString() : new Date().toISOString();
           return `
     <url>
-      <loc>https://${req.get('host')}/product/${data.slug}</loc>
-      <changefreq>weekly</changefreq>
+      <loc>https://buildxpc.xyz/product/${data.slug}</loc>
+      <lastmod>${lastmod}</lastmod>
+      <changefreq>daily</changefreq>
       <priority>0.8</priority>
     </url>`;
         }).join('');
 
         xml = `<?xml version="1.0" encoding="UTF-8"?>
-  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    ${urls}
-  </urlset>`;
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://buildxpc.xyz/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  ${urls}
+</urlset>`;
         cache.set(cacheKey, xml);
       } catch (error: any) {
         handleFirestoreQuotaError(error);
-        console.error(`Error generating sitemap for ${category}:`, error.message);
+        console.error("Error generating sitemap:", error.message);
         return res.status(500).send("Error generating sitemap");
       }
     }
@@ -175,16 +163,16 @@ async function startServer() {
           template = template.replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${meta.title}" />`);
           template = template.replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${meta.description}" />`);
           template = template.replace(/<meta property="og:image" content=".*?" \/>/, `<meta property="og:image" content="${meta.ogImage}" />`);
-          template = template.replace(/<meta property="og:url" content=".*?" \/>/, `<meta property="og:url" content="https://${req.get('host')}/product/${slug}" />`);
+          template = template.replace(/<meta property="og:url" content=".*?" \/>/, `<meta property="og:url" content="https://buildxpc.xyz/product/${slug}" />`);
 
           // Replace Twitter Tags
           template = template.replace(/<meta property="twitter:title" content=".*?" \/>/, `<meta property="twitter:title" content="${meta.title}" />`);
           template = template.replace(/<meta property="twitter:description" content=".*?" \/>/, `<meta property="twitter:description" content="${meta.description}" />`);
           template = template.replace(/<meta property="twitter:image" content=".*?" \/>/, `<meta property="twitter:image" content="${meta.ogImage}" />`);
-          template = template.replace(/<meta property="twitter:url" content=".*?" \/>/, `<meta property="twitter:url" content="https://${req.get('host')}/product/${slug}" />`);
+          template = template.replace(/<meta property="twitter:url" content=".*?" \/>/, `<meta property="twitter:url" content="https://buildxpc.xyz/product/${slug}" />`);
 
           // Replace Canonical
-          template = template.replace(/<link rel="canonical" href=".*?" \/>/, `<link rel="canonical" href="https://${req.get('host')}/product/${slug}" />`);
+          template = template.replace(/<link rel="canonical" href=".*?" \/>/, `<link rel="canonical" href="https://buildxpc.xyz/product/${slug}" />`);
         }
       }
 

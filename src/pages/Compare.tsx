@@ -262,22 +262,22 @@ export default function Compare() {
             exit={{ opacity: 0, y: 20 }}
             className="bg-white border border-black/5 rounded-[3rem] overflow-hidden shadow-2xl shadow-black/5"
           >
-            <div className="grid grid-cols-3 border-b border-black/5 bg-black/[0.02]">
-              <div className="p-8 font-bold text-black/30 uppercase tracking-widest text-xs flex items-center">Specification</div>
-              <div className="p-8 font-bold text-black text-center border-x border-black/5">{p1.name}</div>
-              <div className="p-8 font-bold text-black text-center">{p2.name}</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 border-b border-black/5 bg-black/[0.02]">
+              <div className="hidden md:flex p-8 font-bold text-black/30 uppercase tracking-widest text-xs items-center">Specification</div>
+              <div className="p-4 md:p-8 font-bold text-black text-center border-r md:border-x border-black/5 text-sm md:text-base">{p1.name}</div>
+              <div className="p-4 md:p-8 font-bold text-black text-center text-sm md:text-base">{p2.name}</div>
             </div>
             
             {comparisonRows.map((row, i) => (
-              <div key={row.key} className={`grid grid-cols-3 border-b border-black/5 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-black/[0.01]'}`}>
-                <div className="p-6 md:p-8 flex items-center gap-3">
+              <div key={row.key} className={`grid grid-cols-2 md:grid-cols-3 border-b border-black/5 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-black/[0.01]'}`}>
+                <div className="col-span-2 md:col-span-1 p-3 md:p-8 flex items-center gap-3 bg-black/[0.02] md:bg-transparent border-b md:border-b-0 border-black/5">
                   <row.icon className="w-4 h-4 text-cyan-600" />
-                  <span className="text-sm font-bold text-black/60 uppercase tracking-widest">{row.label}</span>
+                  <span className="text-[10px] md:text-sm font-bold text-black/60 uppercase tracking-widest">{row.label}</span>
                 </div>
-                <div className="p-6 md:p-8 text-center font-bold text-black border-x border-black/5">
+                <div className="p-4 md:p-8 text-center font-bold text-black border-r md:border-x border-black/5 text-sm md:text-base">
                   {p1[row.key] || '—'}
                 </div>
-                <div className="p-6 md:p-8 text-center font-bold text-black">
+                <div className="p-4 md:p-8 text-center font-bold text-black text-sm md:text-base">
                   {p2[row.key] || '—'}
                 </div>
               </div>

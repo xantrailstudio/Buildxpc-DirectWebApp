@@ -19,7 +19,6 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4 md:gap-8">
           <div className="hidden md:flex items-center gap-6">
-            <Link to="/directory" className="text-sm font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest">Directory</Link>
             <Link to="/compare" className="text-sm font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest">Compare</Link>
             <Link to="/favorites" className="text-sm font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest">Favorites</Link>
             <Link to="/about" className="text-sm font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest">Platform</Link>
@@ -48,13 +47,6 @@ export default function Navbar() {
             className="md:hidden border-t border-black/5 bg-white overflow-hidden"
           >
             <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
-              <Link 
-                to="/directory" 
-                className="text-lg font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Directory
-              </Link>
               <Link 
                 to="/compare" 
                 className="text-lg font-bold text-black/60 hover:text-cyan-600 transition-colors uppercase tracking-widest py-2"

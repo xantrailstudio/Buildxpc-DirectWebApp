@@ -67,7 +67,7 @@ export default function ProductDetail() {
     return (
       <div className="text-center py-24 space-y-4">
         <h2 className="text-3xl font-bold">Product Not Found</h2>
-        <Button onClick={() => navigate('/')} variant="outline">Back to Directory</Button>
+        <Button onClick={() => navigate('/')} variant="outline">Back to Home</Button>
       </div>
     );
   }
@@ -125,12 +125,12 @@ export default function ProductDetail() {
   return (
     <div className="max-w-4xl mx-auto py-4 md:py-8 space-y-8 md:space-y-12 px-4">
       <Button 
-        onClick={() => navigate('/directory')} 
+        onClick={() => navigate('/')} 
         variant="ghost" 
         className="text-black/40 hover:text-black hover:bg-black/5 -ml-2 md:-ml-4"
       >
         <ChevronLeft className="w-4 h-4 mr-2" />
-        Back to Directory
+        Back to Home
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12">
