@@ -70,10 +70,20 @@ async function startServer() {
 
       if (!isFirestoreOverQuota) {
         try {
-          // Fetch up to 20,000 products to cover the 15,000+ requirement
-          const snapshot = await db.collection("products").limit(20000).get();
+          // Fetch in batches to avoid the 10,000 limit error
+          let snapshot = await db.collection("products").limit(10000).get();
+          let allDocs = [...snapshot.docs];
+
+          while (snapshot.docs.length === 10000 && allDocs.length < 20000) {
+            const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            snapshot = await db.collection("products")
+              .startAfter(lastVisible)
+              .limit(10000)
+              .get();
+            allDocs = [...allDocs, ...snapshot.docs];
+          }
           
-          const urls = snapshot.docs.map(docSnap => {
+          const urls = allDocs.map(docSnap => {
             const data = docSnap.data() as any;
             const lastmod = data.lastUpdated ? new Date(data.lastUpdated).toISOString() : new Date().toISOString();
             return `

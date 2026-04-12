@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, limit, getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, limit, getDoc, doc, startAfter } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product } from '../lib/types';
 import Fuse from 'fuse.js';
@@ -42,14 +42,31 @@ export default function Home() {
   useEffect(() => {
     const fetchSearchCache = async () => {
       try {
-        // Increased limit to 15,000 for full search capability
-        const q = query(collection(db, 'products'), limit(15000));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({
+        // Fetch in batches to avoid the 10,000 limit error
+        const firstBatch = query(collection(db, 'products'), limit(10000));
+        const firstSnapshot = await getDocs(firstBatch);
+        
+        let allData = firstSnapshot.docs.map(doc => ({
           name: doc.data().name,
           slug: doc.data().slug
         }));
-        setAllProducts(data);
+
+        if (firstSnapshot.docs.length === 10000) {
+          const lastVisible = firstSnapshot.docs[firstSnapshot.docs.length - 1];
+          const secondBatch = query(
+            collection(db, 'products'), 
+            startAfter(lastVisible),
+            limit(10000)
+          );
+          const secondSnapshot = await getDocs(secondBatch);
+          const secondData = secondSnapshot.docs.map(doc => ({
+            name: doc.data().name,
+            slug: doc.data().slug
+          }));
+          allData = [...allData, ...secondData];
+        }
+
+        setAllProducts(allData);
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
