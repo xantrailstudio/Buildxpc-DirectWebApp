@@ -162,8 +162,16 @@ async function startServer() {
 
       res.json({ description });
     } catch (error: any) {
-      console.error("Error in generate-description:", error.message);
-      res.status(500).json({ error: "Failed to generate description", details: error.message });
+      console.error(`CRITICAL: Error in generate-description for ${slug}:`, error.message);
+      if (error.status === 401) {
+        console.error("Groq API Error: 401 Unauthorized. Please check your GROQ_API_KEY.");
+      } else if (error.status === 429) {
+        console.error("Groq API Error: 429 Rate Limit Exceeded.");
+      }
+      
+      // Even if Groq fails, return a professional fallback so the UI doesn't break
+      const fallbackDesc = `High-performance ${category} component from ${manufacturer}, engineered for reliability and enthusiast-grade PC builds.`;
+      res.json({ description: fallbackDesc, error: error.message });
     }
   });
 

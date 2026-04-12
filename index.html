@@ -25,26 +25,13 @@
     <script>
       // BuildXpc - Hardware Enthusiast Platform
       // This project does NOT use MetaMask or any Web3 technology.
-      // We aggressively neutralize the ethereum provider to prevent browser extensions from injecting code.
-      (function() {
-        const proxy = new Proxy({}, {
-          get: () => undefined,
-          set: () => true,
-          apply: () => undefined,
-          construct: () => ({})
-        });
-        try {
-          Object.defineProperty(window, 'ethereum', {
-            value: proxy,
-            writable: false,
-            configurable: false
-          });
-          window.web3 = proxy;
-        } catch (e) {
-          window.ethereum = proxy;
-          window.web3 = proxy;
+      // We suppress noise from external browser extensions to keep the console clean.
+      window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason?.message || event.reason?.toString() || '';
+        if (reason.includes('MetaMask') || reason.includes('ethereum')) {
+          event.preventDefault();
         }
-      })();
+      });
     </script>
   </head>
   <body>
