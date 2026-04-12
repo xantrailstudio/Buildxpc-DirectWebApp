@@ -4,22 +4,19 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { LRUCache } from "lru-cache";
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  collection, 
-  query, 
-  where, 
-  limit, 
-  getDocs 
-} from "firebase/firestore";
+import admin from "firebase-admin";
 
-// Initialize Firebase Client SDK
+// Initialize Firebase Admin SDK
 import firebaseConfig from "./firebase-applet-config.json" assert { type: "json" };
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    projectId: firebaseConfig.projectId,
+  });
+}
+
+const db = admin.firestore();
+// Use default database as firestoreDatabaseId is not in config
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,30 +57,35 @@ async function startServer() {
     const cacheKey = "sitemap-all";
     let xml = cache.get(cacheKey) as string;
 
-    if (!xml) {
-      if (isFirestoreOverQuota) {
-        return res.status(503).send("Service temporarily unavailable. Please try again later.");
+    // If we have it in cache, return immediately (even if stale, LRU handles TTL)
+    // But the user wants to return the LAST cached sitemap even if quota is hit.
+    // So we try to fetch only if we don't have it OR if we want to refresh.
+    
+    if (!xml || isFirestoreOverQuota) {
+      if (isFirestoreOverQuota && xml) {
+        console.log("Serving stale sitemap from cache due to quota limit.");
+        res.header("Content-Type", "application/xml");
+        return res.send(xml);
       }
 
-      try {
-        const productsRef = collection(db, "products");
-        // Fetch up to 20,000 products to cover the 15,000+ requirement
-        const q = query(productsRef, limit(20000));
-        const snapshot = await getDocs(q);
-        
-        const urls = snapshot.docs.map(docSnap => {
-          const data = docSnap.data() as any;
-          const lastmod = data.lastUpdated ? new Date(data.lastUpdated).toISOString() : new Date().toISOString();
-          return `
+      if (!isFirestoreOverQuota) {
+        try {
+          // Fetch up to 20,000 products to cover the 15,000+ requirement
+          const snapshot = await db.collection("products").limit(20000).get();
+          
+          const urls = snapshot.docs.map(docSnap => {
+            const data = docSnap.data() as any;
+            const lastmod = data.lastUpdated ? new Date(data.lastUpdated).toISOString() : new Date().toISOString();
+            return `
     <url>
       <loc>https://buildxpc.xyz/product/${data.slug}</loc>
       <lastmod>${lastmod}</lastmod>
       <changefreq>daily</changefreq>
       <priority>0.8</priority>
     </url>`;
-        }).join('');
+          }).join('');
 
-        xml = `<?xml version="1.0" encoding="UTF-8"?>
+          xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://buildxpc.xyz/</loc>
@@ -92,12 +94,22 @@ async function startServer() {
   </url>
   ${urls}
 </urlset>`;
-        cache.set(cacheKey, xml);
-      } catch (error: any) {
-        handleFirestoreQuotaError(error);
-        console.error("Error generating sitemap:", error.message);
-        return res.status(500).send("Error generating sitemap");
+          cache.set(cacheKey, xml);
+        } catch (error: any) {
+          handleFirestoreQuotaError(error);
+          console.error("Error generating sitemap:", error.message);
+          // If fetch fails but we have a cached version, use it
+          if (xml) {
+            res.header("Content-Type", "application/xml");
+            return res.send(xml);
+          }
+          return res.status(500).send("Error generating sitemap");
+        }
       }
+    }
+
+    if (!xml) {
+      return res.status(503).send("Service temporarily unavailable. Please try again later.");
     }
 
     res.header("Content-Type", "application/xml");
@@ -136,9 +148,8 @@ async function startServer() {
 
         if (!meta && slug && !isFirestoreOverQuota) {
           try {
-            const docRef = doc(db, "products", slug);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
+            const docSnap = await db.collection("products").doc(slug).get();
+            if (docSnap.exists) {
               const data = docSnap.data();
               meta = {
                 title: `${data?.name} - ${data?.category} Specs | BuildXpc`,

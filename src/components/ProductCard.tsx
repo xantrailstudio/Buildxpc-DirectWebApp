@@ -110,6 +110,9 @@ export default function ProductCard({ product }: { product: Product; key?: strin
 
   return (
     <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-50px" }}
       whileHover={{ y: -5 }}
       transition={{ type: 'spring', stiffness: 300 }}
     >
