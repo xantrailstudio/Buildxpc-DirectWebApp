@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { collection, getDocs, query } from 'firebase/firestore';
+import { collection, getDocs, query, limit, startAfter } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product } from '../lib/types';
 import { Input } from '../components/ui/input';
@@ -23,10 +23,24 @@ export default function Compare() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const q = query(collection(db, 'products'));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => doc.data() as Product);
-        setProducts(data);
+        // Fetch in batches to avoid the 10,000 limit error
+        const firstBatch = query(collection(db, 'products'), limit(10000));
+        const firstSnapshot = await getDocs(firstBatch);
+        
+        let allData = firstSnapshot.docs.map(doc => doc.data() as Product);
+
+        if (firstSnapshot.docs.length === 10000) {
+          const lastVisible = firstSnapshot.docs[firstSnapshot.docs.length - 1];
+          const secondBatch = query(
+            collection(db, 'products'), 
+            startAfter(lastVisible),
+            limit(10000)
+          );
+          const secondSnapshot = await getDocs(secondBatch);
+          const secondData = secondSnapshot.docs.map(doc => doc.data() as Product);
+          allData = [...allData, ...secondData];
+        }
+        setProducts(allData);
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
