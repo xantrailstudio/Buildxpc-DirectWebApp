@@ -21,9 +21,16 @@ const groq = new Groq({
 // Initialize Firebase Admin
 import firebaseConfig from "./firebase-applet-config.json" assert { type: "json" };
 if (!admin.apps.length) {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
+  try {
+    // Attempting default initialization which is most reliable in this environment
+    admin.initializeApp();
+    console.log("Firebase Admin initialized with default credentials");
+  } catch (e) {
+    console.warn("Default Admin initialization failed, falling back to config:", e);
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+  }
 }
 const db = admin.firestore();
 
@@ -130,7 +137,13 @@ async function startServer() {
         model: "llama-3.3-70b-versatile",
       });
 
-      const description = completion.choices[0]?.message?.content?.trim() || "";
+      let description = completion.choices[0]?.message?.content?.trim() || "";
+      console.log(`Groq generated description for ${slug}:`, description.substring(0, 50) + "...");
+
+      if (!description) {
+        console.warn(`Groq returned an empty description for ${slug}`);
+        description = `High-performance ${category} component from ${manufacturer}, designed for demanding workloads and enthusiast-grade PC builds.`;
+      }
       
       // Update local cache immediately
       cache.set(`desc-${slug}`, description);
