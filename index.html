@@ -28,7 +28,7 @@
       // We suppress noise from external browser extensions to keep the console clean.
       window.addEventListener('unhandledrejection', (event) => {
         const reason = event.reason?.message || event.reason?.toString() || '';
-        if (reason.includes('MetaMask') || reason.includes('ethereum')) {
+        if (reason.includes('MetaMask') || reason.includes('ethereum') || reason.includes('Failed to connect to MetaMask')) {
           event.preventDefault();
         }
       });

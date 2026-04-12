@@ -56,9 +56,23 @@ export default function ProductDetail() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto py-12 space-y-8 animate-pulse">
-        <div className="h-8 w-32 bg-white/5 rounded-lg" />
-        <div className="h-64 bg-white/5 rounded-3xl border border-white/10" />
+      <div className="max-w-4xl mx-auto py-8 md:py-12 space-y-8 px-4 animate-pulse">
+        <div className="h-10 w-32 bg-black/5 rounded-xl" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="space-y-4">
+              <div className="h-6 w-24 bg-black/5 rounded-full" />
+              <div className="h-16 w-full bg-black/5 rounded-2xl" />
+              <div className="h-24 w-full bg-black/5 rounded-2xl" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-24 bg-black/5 rounded-2xl" />
+              ))}
+            </div>
+          </div>
+          <div className="h-[400px] bg-black/5 rounded-3xl" />
+        </div>
       </div>
     );
   }

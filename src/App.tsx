@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Cpu } from 'lucide-react';
 import Home from './pages/Home';
+import Browse from './pages/Browse';
 import ProductDetail from './pages/ProductDetail';
 import Compare from './pages/Compare';
 import Favorites from './pages/Favorites';
@@ -19,6 +20,7 @@ export default function App() {
         <main className="container mx-auto px-4 py-8 flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/browse" element={<Browse />} />
             <Route path="/product/:slug" element={<ProductDetail />} />
             <Route path="/compare" element={<Compare />} />
             <Route path="/favorites" element={<Favorites />} />

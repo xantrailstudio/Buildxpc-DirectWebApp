@@ -8,16 +8,26 @@ import { Input } from '../components/ui/input';
 import { Search, Zap, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProductCard from '../components/ProductCard';
+import ProductSkeleton from '../components/ProductSkeleton';
 
 import { useAppStore } from '../lib/store';
 
 export default function Home() {
   const { recentlyViewed } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [allProducts, setAllProducts] = useState<{ name: string; slug: string }[]>([]);
   const [searchResults, setSearchResults] = useState<{ name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Fetch full data for recently viewed slugs
   useEffect(() => {
@@ -80,23 +90,19 @@ export default function Home() {
     if (allProducts.length === 0) return null;
     return new Fuse(allProducts, {
       keys: ['name'],
-      threshold: 0.3,
+      threshold: 0.4,
       distance: 100,
     });
   }, [allProducts]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.trim() === '' || !fuse) {
-        setSearchResults([]);
-        return;
-      }
-      const results = fuse.search(searchQuery).map(r => r.item);
-      setSearchResults(results.slice(0, 10));
-    }, 150); // Small debounce to keep UI snappy
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, fuse]);
+    if (!debouncedQuery.trim() || !fuse) {
+      setSearchResults([]);
+      return;
+    }
+    const results = fuse.search(debouncedQuery).map(r => r.item);
+    setSearchResults(results.slice(0, 20));
+  }, [debouncedQuery, fuse]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-24 py-12 md:py-24">
@@ -178,7 +184,7 @@ export default function Home() {
 
       {/* Recently Viewed */}
       <AnimatePresence>
-        {recentProducts.length > 0 && (
+        {(loading || recentProducts.length > 0) && (
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -191,9 +197,13 @@ export default function Home() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-4 sm:px-0">
-              {recentProducts.map((product) => (
-                <ProductCard key={product.slug} product={product} />
-              ))}
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => <ProductSkeleton key={i} />)
+              ) : (
+                recentProducts.map((product) => (
+                  <ProductCard key={product.slug} product={product} />
+                ))
+              )}
             </div>
           </motion.section>
         )}
