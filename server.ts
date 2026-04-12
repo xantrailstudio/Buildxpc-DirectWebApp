@@ -4,28 +4,17 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { LRUCache } from "lru-cache";
-import Groq from "groq-sdk";
 import { initializeApp } from "firebase/app";
 import { 
   getFirestore, 
   doc, 
   getDoc, 
-  setDoc, 
   collection, 
   query, 
   where, 
   limit, 
   getDocs 
 } from "firebase/firestore";
-
-// Initialize Groq
-if (!process.env.GROQ_API_KEY) {
-  console.warn("WARNING: GROQ_API_KEY is missing. AI description generation will fail.");
-}
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY || "missing_key",
-});
 
 // Initialize Firebase Client SDK
 import firebaseConfig from "./firebase-applet-config.json" assert { type: "json" };
@@ -64,101 +53,6 @@ async function startServer() {
   // API routes
   serverApp.get("/api/health", (req, res) => {
     res.json({ status: "ok", firestoreStatus: isFirestoreOverQuota ? "over_quota" : "ok" });
-  });
-
-  serverApp.post("/api/generate-description", express.json(), async (req, res) => {
-    // Verify API Key existence for debugging in production
-    if (!process.env.GROQ_API_KEY) {
-      console.error("CRITICAL ERROR: GROQ_API_KEY is missing from environment variables.");
-      throw new Error("GROQ_API_KEY is not configured. Please check your environment variables.");
-    }
-
-    const { slug, name, category, manufacturer, specs } = req.body;
-
-    if (!slug || !name) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Check local cache first (fastest, no Firestore cost)
-    const cachedDesc = cache.get(`desc-${slug}`);
-    if (cachedDesc) {
-      return res.json({ description: cachedDesc });
-    }
-
-    console.log(`Generating description for: ${slug} (${name})`);
-
-    try {
-      let docData: any = null;
-      
-      if (!isFirestoreOverQuota) {
-        try {
-          const docRef = doc(db, "products", slug);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) docData = docSnap.data();
-        } catch (error: any) {
-          handleFirestoreQuotaError(error);
-          console.error("Firestore read error:", error.message);
-        }
-      }
-      
-      if (docData?.description) {
-        console.log(`Using cached description for ${slug}`);
-        cache.set(`desc-${slug}`, docData.description);
-        return res.json({ description: docData.description });
-      }
-
-      console.log(`No cache found for ${slug}, calling Groq...`);
-
-      // Generate using Groq
-      const prompt = `Generate a professional, concise (max 2 sentences) description for a PC component.
-      Name: ${name}
-      Category: ${category}
-      Manufacturer: ${manufacturer}
-      Specs: ${JSON.stringify(specs)}
-      
-      Focus on performance and value. Do not use marketing fluff like "unleash your potential". Just facts and professional tone.`;
-
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "llama-3.3-70b-versatile",
-      });
-
-      let description = completion.choices[0]?.message?.content?.trim() || "";
-      console.log(`Groq generated description for ${slug}:`, description.substring(0, 50) + "...");
-
-      if (!description) {
-        console.warn(`Groq returned an empty description for ${slug}`);
-        description = `High-performance ${category} component from ${manufacturer}, designed for demanding workloads and enthusiast-grade PC builds.`;
-      }
-      
-      // Update local cache immediately
-      cache.set(`desc-${slug}`, description);
-
-      // Save to Firestore so it's cached for all users (only if not over quota)
-      if (!isFirestoreOverQuota) {
-        try {
-          const docRef = doc(db, "products", slug);
-          await setDoc(docRef, { description }, { merge: true });
-          console.log(`Saved description for ${slug} to Firestore`);
-        } catch (fsError: any) {
-          handleFirestoreQuotaError(fsError);
-          console.error("Firestore write error:", fsError.message);
-        }
-      }
-
-      res.json({ description });
-    } catch (error: any) {
-      console.error(`CRITICAL: Error in generate-description for ${slug}:`, error.message);
-      if (error.status === 401) {
-        console.error("Groq API Error: 401 Unauthorized. Please check your GROQ_API_KEY.");
-      } else if (error.status === 429) {
-        console.error("Groq API Error: 429 Rate Limit Exceeded.");
-      }
-      
-      // Even if Groq fails, return a professional fallback so the UI doesn't break
-      const fallbackDesc = `High-performance ${category} component from ${manufacturer}, engineered for reliability and enthusiast-grade PC builds.`;
-      res.json({ description: fallbackDesc, error: error.message });
-    }
   });
 
   // Sitemap Index

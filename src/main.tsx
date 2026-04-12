@@ -16,8 +16,24 @@ if (typeof window !== 'undefined') {
 
   const originalError = console.error;
   console.error = (...args) => {
-    const msg = args[0]?.toString() || '';
-    if (msg.includes('MetaMask') || msg.includes('[vite] failed to connect to websocket') || msg.includes('ethereum')) {
+    const msg = args.map(arg => {
+      try {
+        return typeof arg === 'string' ? arg : JSON.stringify(arg);
+      } catch (e) {
+        return String(arg);
+      }
+    }).join(' ');
+
+    const noiseKeywords = [
+      'MetaMask', 
+      'ethereum', 
+      'web3', 
+      'extension', 
+      '[vite] failed to connect to websocket',
+      'WebSocket closed without opened'
+    ];
+
+    if (noiseKeywords.some(keyword => msg.includes(keyword))) {
       return;
     }
     originalError.apply(console, args);

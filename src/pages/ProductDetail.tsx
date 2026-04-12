@@ -29,7 +29,6 @@ export default function ProductDetail() {
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generatingDescription, setGeneratingDescription] = useState(false);
   
   const { favorites, toggleFavorite, addRecentlyViewed } = useAppStore();
   const isFavorite = slug ? favorites.includes(slug) : false;
@@ -45,32 +44,6 @@ export default function ProductDetail() {
           setProduct(data);
           document.title = `${data.name} Specs & Details | BuildXpc`;
           addRecentlyViewed(slug);
-
-          // Generate description if missing
-          if (!data.description) {
-            setGeneratingDescription(true);
-            try {
-              const response = await fetch('/api/generate-description', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  slug: data.slug,
-                  name: data.name,
-                  category: data.category,
-                  manufacturer: data.manufacturer,
-                  specs: data
-                }),
-              });
-              const result = await response.json();
-              if (result.description) {
-                setProduct(prev => prev ? { ...prev, description: result.description } : null);
-              }
-            } catch (err) {
-              console.error('Failed to generate description:', err);
-            } finally {
-              setGeneratingDescription(false);
-            }
-          }
         }
       } catch (error) {
         console.error('Error fetching product:', error);
@@ -184,16 +157,9 @@ export default function ProductDetail() {
             <h1 className="text-3xl md:text-6xl font-bold tracking-tighter leading-tight text-black">
               {product.name}
             </h1>
-            {generatingDescription ? (
-              <div className="space-y-2">
-                <div className="h-4 w-full bg-black/5 animate-pulse rounded" />
-                <div className="h-4 w-2/3 bg-black/5 animate-pulse rounded" />
-              </div>
-            ) : (
-              <p className="text-black/40 text-base md:text-lg leading-relaxed font-medium">
-                {product.description || `Professional-grade ${product.category} from ${product.manufacturer}. Engineered for high-performance computing and extreme workloads.`}
-              </p>
-            )}
+            <p className="text-black/40 text-base md:text-lg leading-relaxed font-medium">
+              {product.description || `Professional-grade ${product.category} from ${product.manufacturer}. Engineered for high-performance computing and extreme workloads.`}
+            </p>
           </motion.div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
