@@ -18,6 +18,9 @@ export default function Browse() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [manufacturer, setManufacturer] = useState<string | null>(null);
+  const [vram, setVram] = useState<string | null>(null);
+  const [cores, setCores] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
   const { ref, inView } = useInView({
@@ -26,6 +29,10 @@ export default function Browse() {
   });
 
   const categories = ['GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'Motherboard'];
+  const manufacturers = ['NVIDIA', 'AMD', 'Intel', 'ASUS', 'MSI', 'Gigabyte', 'Corsair', 'Samsung', 'EVGA'];
+  const vramOptions = ['4GB', '8GB', '12GB', '16GB', '24GB'];
+  const coreOptions = ['4', '6', '8', '12', '16', '24', '32'];
+  const ramOptions = ['8GB', '16GB', '32GB', '64GB', '128GB'];
 
   const fetchProducts = async (isInitial = true) => {
     if (isInitial) {
@@ -37,21 +44,26 @@ export default function Browse() {
 
     try {
       let q;
-      const baseConstraints = [orderBy('name')];
       const collectionRef = collection(db, 'products');
+      let queryConstraints: any[] = [];
 
-      if (category) {
-        if (isInitial) {
-          q = query(collectionRef, where('category', '==', category), limit(PAGE_SIZE));
-        } else {
-          q = query(collectionRef, where('category', '==', category), startAfter(lastDoc), limit(PAGE_SIZE));
-        }
+      if (category) queryConstraints.push(where('category', '==', category));
+      if (manufacturer) queryConstraints.push(where('manufacturer', '==', manufacturer));
+      if (vram && category === 'GPU') queryConstraints.push(where('vram', '==', vram));
+      if (cores && category === 'CPU') queryConstraints.push(where('cores', '==', cores));
+      if (vram && category === 'RAM') queryConstraints.push(where('capacity', '==', vram)); // Reuse vram state for capacity
+
+      // Note: Multiple filters + orderBy requires composite indexes in Firestore.
+      // If no filters are applied, we use orderBy('name').
+      // If filters are applied, we might need to skip orderBy or ensure indexes exist.
+      if (queryConstraints.length === 0) {
+        queryConstraints.push(orderBy('name'));
+      }
+
+      if (isInitial) {
+        q = query(collectionRef, ...queryConstraints, limit(PAGE_SIZE));
       } else {
-        if (isInitial) {
-          q = query(collectionRef, ...baseConstraints, limit(PAGE_SIZE));
-        } else {
-          q = query(collectionRef, ...baseConstraints, startAfter(lastDoc), limit(PAGE_SIZE));
-        }
+        q = query(collectionRef, ...queryConstraints, startAfter(lastDoc), limit(PAGE_SIZE));
       }
 
       const snapshot = await getDocs(q);
@@ -75,7 +87,14 @@ export default function Browse() {
 
   useEffect(() => {
     fetchProducts(true);
-  }, [category]);
+  }, [category, manufacturer, vram, cores]);
+
+  const clearFilters = () => {
+    setCategory(null);
+    setManufacturer(null);
+    setVram(null);
+    setCores(null);
+  };
 
   useEffect(() => {
     if (inView && hasMore && !loading && !loadingMore) {
@@ -91,35 +110,110 @@ export default function Browse() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 px-4 sm:px-0">
-        <Button 
-          variant={category === null ? "default" : "outline"}
-          onClick={() => setCategory(null)}
-          className="rounded-full px-6"
-        >
-          All
-        </Button>
-        {categories.map(cat => (
-          <Button 
-            key={cat}
-            variant={category === cat ? "default" : "outline"}
-            onClick={() => setCategory(cat)}
-            className="rounded-full px-6"
-          >
-            {cat}
-          </Button>
-        ))}
-        
-        {category && (
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setCategory(null)}
-            className="text-black/40 hover:text-red-500 gap-2 font-bold uppercase tracking-widest text-[10px]"
-          >
-            <X className="w-3 h-3" />
-            Clear Filter
-          </Button>
+      <div className="space-y-6 bg-white border border-black/5 p-6 rounded-[2rem] shadow-sm">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Categories</h3>
+            {(category || manufacturer || vram || cores) && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={clearFilters}
+                className="text-black/40 hover:text-red-500 gap-2 font-bold uppercase tracking-widest text-[10px] h-auto p-0"
+              >
+                <X className="w-3 h-3" />
+                Clear All
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant={category === null ? "default" : "outline"}
+              onClick={() => setCategory(null)}
+              className="rounded-full px-6 h-9 text-xs"
+            >
+              All
+            </Button>
+            {categories.map(cat => (
+              <Button 
+                key={cat}
+                variant={category === cat ? "default" : "outline"}
+                onClick={() => setCategory(cat)}
+                className="rounded-full px-6 h-9 text-xs"
+              >
+                {cat}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Manufacturer</h3>
+          <div className="flex flex-wrap gap-2">
+            {manufacturers.map(m => (
+              <Button 
+                key={m}
+                variant={manufacturer === m ? "default" : "outline"}
+                onClick={() => setManufacturer(manufacturer === m ? null : m)}
+                className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
+              >
+                {m}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {category === 'GPU' && (
+          <div className="space-y-4 pt-2">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">VRAM Capacity</h3>
+            <div className="flex flex-wrap gap-2">
+              {vramOptions.map(v => (
+                <Button 
+                  key={v}
+                  variant={vram === v ? "default" : "outline"}
+                  onClick={() => setVram(vram === v ? null : v)}
+                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
+                >
+                  {v}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {category === 'CPU' && (
+          <div className="space-y-4 pt-2">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Core Count</h3>
+            <div className="flex flex-wrap gap-2">
+              {coreOptions.map(c => (
+                <Button 
+                  key={c}
+                  variant={cores === c ? "default" : "outline"}
+                  onClick={() => setCores(cores === c ? null : c)}
+                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
+                >
+                  {c} Cores
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        {category === 'RAM' && (
+          <div className="space-y-4 pt-2">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">RAM Capacity</h3>
+            <div className="flex flex-wrap gap-2">
+              {ramOptions.map(r => (
+                <Button 
+                  key={r}
+                  variant={vram === r ? "default" : "outline"}
+                  onClick={() => setVram(vram === r ? null : r)}
+                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
+                >
+                  {r}
+                </Button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
