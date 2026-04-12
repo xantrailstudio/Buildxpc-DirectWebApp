@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A PC component with technical specifications.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the product" },
+        "slug": { "type": "string", "description": "URL-friendly identifier" },
+        "manufacturer": { "type": "string", "description": "Brand name (e.g., NVIDIA, AMD)" },
+        "chipset": { "type": "string", "description": "Core chipset identifier" },
+        "vram": { "type": "string", "description": "Video memory capacity" },
+        "base_clock": { "type": "string", "description": "Base clock speed" },
+        "boost_clock": { "type": "string", "description": "Boost clock speed" },
+        "tdp": { "type": "string", "description": "Thermal Design Power in Watts" },
+        "category": { "type": "string", "description": "Component category (e.g., GPU, CPU)" }
+      },
+      "required": ["name", "slug", "category"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/products/{slug}": {
+      "schema": "Product",
+      "description": "Collection of PC parts"
+    },
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    }
+  }
+}
