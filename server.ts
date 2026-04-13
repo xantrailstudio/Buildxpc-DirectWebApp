@@ -102,6 +102,21 @@ async function startServer() {
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>https://buildxpc.xyz/browse</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://buildxpc.xyz/compare</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://buildxpc.xyz/contact</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
   ${urls}
 </urlset>`;
           cache.set(cacheKey, xml);
@@ -160,11 +175,12 @@ async function startServer() {
           try {
             const docSnap = await db.collection("products").doc(slug).get();
             if (docSnap.exists) {
-              const data = docSnap.data();
+              const data = docSnap.data() as any;
               meta = {
                 title: `${data?.name} - ${data?.category} Specs | BuildXpc`,
                 description: `Technical specifications for ${data?.name}. ${data?.chipset || ''} ${data?.vram || ''} TDP: ${data?.tdp || ''}`,
                 ogImage: `https://picsum.photos/seed/${slug}/1200/630`,
+                data: data // Store full data for SSR
               };
               cache.set(cacheKey, meta);
             }
@@ -180,6 +196,18 @@ async function startServer() {
           // Replace Description
           template = template.replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${meta.description}" />`);
           
+          // SSR Content Injection for SEO
+          const ssrContent = `
+            <div id="ssr-product-data" style="display:none">
+              <h1>${meta.data.name}</h1>
+              <p>${meta.description}</p>
+              <ul>
+                ${Object.entries(meta.data).map(([key, val]) => `<li>${key}: ${val}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+          template = template.replace('<div id="root">', `${ssrContent}<div id="root">`);
+
           // Replace OG Tags
           template = template.replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${meta.title}" />`);
           template = template.replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${meta.description}" />`);

@@ -220,7 +220,7 @@ export default function Browse() {
       <div className="space-y-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-4 sm:px-0">
           <AnimatePresence mode="wait">
-            {loading ? (
+            {loading && products.length === 0 ? (
               Array.from({ length: 8 }).map((_, i) => <ProductSkeleton key={i} />)
             ) : (
               products.map((product) => (

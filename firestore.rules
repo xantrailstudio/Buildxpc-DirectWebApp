@@ -80,5 +80,12 @@ service cloud.firestore {
       // Admins can do anything
       allow write: if isAdmin();
     }
+
+    match /messages/{messageId} {
+      // Allow anyone to create a message (contact form)
+      allow create: if true;
+      // Only admins can read messages
+      allow read: if isAdmin();
+    }
   }
 }
