@@ -19,8 +19,6 @@ export default function Browse() {
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [manufacturer, setManufacturer] = useState<string | null>(null);
-  const [vram, setVram] = useState<string | null>(null);
-  const [cores, setCores] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
   const { ref, inView } = useInView({
@@ -30,14 +28,12 @@ export default function Browse() {
 
   const categories = ['GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'Motherboard'];
   const manufacturers = ['NVIDIA', 'AMD', 'Intel', 'ASUS', 'MSI', 'Gigabyte', 'Corsair', 'Samsung', 'EVGA'];
-  const vramOptions = ['4GB', '8GB', '12GB', '16GB', '24GB'];
-  const coreOptions = ['4', '6', '8', '12', '16', '24', '32'];
-  const ramOptions = ['8GB', '16GB', '32GB', '64GB', '128GB'];
 
   const fetchProducts = async (isInitial = true) => {
     if (isInitial) {
       setLoading(true);
       setHasMore(true);
+      setProducts([]); // Clear products to show skeletons and avoid stale data
     } else {
       setLoadingMore(true);
     }
@@ -47,15 +43,27 @@ export default function Browse() {
       const collectionRef = collection(db, 'products');
       let queryConstraints: any[] = [];
 
-      if (category) queryConstraints.push(where('category', '==', category));
-      if (manufacturer) queryConstraints.push(where('manufacturer', '==', manufacturer));
-      if (vram && category === 'GPU') queryConstraints.push(where('vram', '==', vram));
-      if (cores && category === 'CPU') queryConstraints.push(where('cores', '==', cores));
-      if (vram && category === 'RAM') queryConstraints.push(where('capacity', '==', vram)); // Reuse vram state for capacity
-
+      if (category) {
+        // Try multiple casings to ensure SSD, HDD, etc. show up correctly
+        const casings = [
+          category, 
+          category.toLowerCase(), 
+          category.toUpperCase(),
+          category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
+        ];
+        // Remove duplicates
+        const uniqueCasings = Array.from(new Set(casings));
+        queryConstraints.push(where('category', 'in', uniqueCasings));
+      }
+      
+      if (manufacturer) {
+        const sentenceCase = manufacturer.charAt(0).toUpperCase() + manufacturer.slice(1).toLowerCase();
+        queryConstraints.push(where('manufacturer', 'in', [manufacturer, manufacturer.toLowerCase(), manufacturer.toUpperCase(), sentenceCase]));
+      }
+      
       // Note: Multiple filters + orderBy requires composite indexes in Firestore.
-      // If no filters are applied, we use orderBy('name').
-      // If filters are applied, we might need to skip orderBy or ensure indexes exist.
+      // To keep it simple and avoid index errors for the user, we only order by name
+      // when no filters are applied. Firestore will use Document ID order otherwise.
       if (queryConstraints.length === 0) {
         queryConstraints.push(orderBy('name'));
       }
@@ -87,13 +95,11 @@ export default function Browse() {
 
   useEffect(() => {
     fetchProducts(true);
-  }, [category, manufacturer, vram, cores]);
+  }, [category, manufacturer]);
 
   const clearFilters = () => {
     setCategory(null);
     setManufacturer(null);
-    setVram(null);
-    setCores(null);
   };
 
   useEffect(() => {
@@ -114,7 +120,7 @@ export default function Browse() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Categories</h3>
-            {(category || manufacturer || vram || cores) && (
+            {(category || manufacturer) && (
               <Button 
                 variant="ghost" 
                 size="sm"
@@ -162,59 +168,6 @@ export default function Browse() {
             ))}
           </div>
         </div>
-
-        {category === 'GPU' && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">VRAM Capacity</h3>
-            <div className="flex flex-wrap gap-2">
-              {vramOptions.map(v => (
-                <Button 
-                  key={v}
-                  variant={vram === v ? "default" : "outline"}
-                  onClick={() => setVram(vram === v ? null : v)}
-                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
-                >
-                  {v}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {category === 'CPU' && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Core Count</h3>
-            <div className="flex flex-wrap gap-2">
-              {coreOptions.map(c => (
-                <Button 
-                  key={c}
-                  variant={cores === c ? "default" : "outline"}
-                  onClick={() => setCores(cores === c ? null : c)}
-                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
-                >
-                  {c} Cores
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-        {category === 'RAM' && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">RAM Capacity</h3>
-            <div className="flex flex-wrap gap-2">
-              {ramOptions.map(r => (
-                <Button 
-                  key={r}
-                  variant={vram === r ? "default" : "outline"}
-                  onClick={() => setVram(vram === r ? null : r)}
-                  className="rounded-full px-4 h-8 text-[10px] font-bold uppercase tracking-wider"
-                >
-                  {r}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="space-y-12">
