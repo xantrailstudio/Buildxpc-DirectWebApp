@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, limit, startAfter, orderBy, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product } from '../lib/types';
 import ProductCard from '../components/ProductCard';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, Search } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
+import Fuse from 'fuse.js';
 
 import ProductSkeleton from '../components/ProductSkeleton';
 
@@ -19,14 +21,27 @@ export default function Browse() {
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [manufacturer, setManufacturer] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [hasMore, setHasMore] = useState(true);
+
+  const fuse = useMemo(() => {
+    return new Fuse(products, {
+      keys: ['name', 'manufacturer', 'category', 'chipset'],
+      threshold: 0.4,
+    });
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    return fuse.search(searchQuery).map(r => r.item);
+  }, [searchQuery, products, fuse]);
 
   const { ref, inView } = useInView({
     threshold: 0,
     rootMargin: '200px',
   });
 
-  const categories = ['GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'Motherboard'];
+  const categories = ['GPU', 'CPU', 'RAM', 'SSD', 'HDD', 'Motherboard', 'Storage', 'Case', 'Power Supply'];
   const manufacturers = ['NVIDIA', 'AMD', 'Intel', 'ASUS', 'MSI', 'Gigabyte', 'Corsair', 'Samsung', 'EVGA'];
 
   const fetchProducts = async (isInitial = true) => {
@@ -44,15 +59,26 @@ export default function Browse() {
       let queryConstraints: any[] = [];
 
       if (category) {
-        // Try multiple casings to ensure SSD, HDD, etc. show up correctly
-        const casings = [
+        // Map UI categories to potential database category names
+        let searchCategories = [
           category, 
           category.toLowerCase(), 
           category.toUpperCase(),
           category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
         ];
+
+        if (category === 'SSD') {
+          searchCategories = [...searchCategories, 'Solid State Drive', 'solid state drive', 'Internal Hard Drive', 'Storage'];
+        }
+        if (category === 'HDD') {
+          searchCategories = [...searchCategories, 'Hard Drive', 'hard drive', 'Internal Hard Drive', 'Storage', 'HDD'];
+        }
+        if (category === 'Storage') {
+          searchCategories = [...searchCategories, 'SSD', 'HDD', 'Internal Hard Drive', 'Solid State Drive'];
+        }
+
         // Remove duplicates
-        const uniqueCasings = Array.from(new Set(casings));
+        const uniqueCasings = Array.from(new Set(searchCategories));
         queryConstraints.push(where('category', 'in', uniqueCasings));
       }
       
@@ -100,6 +126,7 @@ export default function Browse() {
   const clearFilters = () => {
     setCategory(null);
     setManufacturer(null);
+    setSearchQuery('');
   };
 
   useEffect(() => {
@@ -112,7 +139,18 @@ export default function Browse() {
     <div className="max-w-7xl mx-auto space-y-12 py-12">
       <div className="space-y-4 px-4 sm:px-0">
         <h1 className="text-4xl font-bold tracking-tighter text-black">Browse Hardware</h1>
-        <p className="text-black/50 font-medium">Explore our database of 15,000+ components.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <p className="text-black/50 font-medium">Explore our database of 15,000+ components.</p>
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-black/20 group-focus-within:text-cyan-600 transition-colors" />
+            <Input 
+              placeholder="Search in these results..."
+              className="pl-11 h-11 bg-white border-black/5 rounded-2xl shadow-sm focus:ring-cyan-500/20"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -120,7 +158,7 @@ export default function Browse() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-widest text-black/40">Categories</h3>
-            {(category || manufacturer) && (
+            {(category || manufacturer || searchQuery) && (
               <Button 
                 variant="ghost" 
                 size="sm"
@@ -176,7 +214,7 @@ export default function Browse() {
             {loading && products.length === 0 ? (
               Array.from({ length: 8 }).map((_, i) => <ProductSkeleton key={i} />)
             ) : (
-              products.map((product) => (
+              filteredProducts.map((product) => (
                 <ProductCard key={product.slug} product={product} />
               ))
             )}
